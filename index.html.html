@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0F1316">
+<title>Lector de células · LAB_LITHIUM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0F1316;
+    --panel: #171D22;
+    --panel-2: #1D242A;
+    --line: #2A333A;
+    --text: #DCE3E6;
+    --text-dim: #8B98A1;
+    --amber: #E8A33D;
+    --amber-dim: #6B4E22;
+    --red: #C0594B;
+    --green: #6FA98A;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text);
+    font-family:'IBM Plex Sans', system-ui, sans-serif; }
+  body{ min-height:100dvh; display:flex; flex-direction:column; padding-bottom: env(safe-area-inset-bottom); }
+
+  header{ padding: 28px 20px 16px; }
+  header h1{ margin:0; font-size: 21px; font-weight:600; letter-spacing: -0.01em; }
+  header p{ margin: 6px 0 0; font-size: 13.5px; color: var(--text-dim); line-height:1.45; max-width: 34ch; }
+
+  main{ flex:1; padding: 0 20px 140px; display:flex; flex-direction:column; gap:18px; }
+
+  .scanner{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .scanner-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  .scanner-head span{ font-size: 13px; color: var(--text-dim); }
+  .dot{ width:7px; height:7px; border-radius:50%; background: var(--text-dim); display:inline-block; margin-right:7px; vertical-align:middle; }
+  .dot.live{ background: var(--green); box-shadow: 0 0 0 3px rgba(111,169,138,0.18); }
+
+  #reader-wrap{ position:relative; background:#000; aspect-ratio: 1/1; display:none; }
+  #reader-wrap.active{ display:block; }
+  #reader{ width:100%; height:100%; }
+  #reader video{ object-fit: cover; width:100% !important; height:100% !important; }
+
+  .frame{ position:absolute; inset: 14%; pointer-events:none; }
+  .frame span{ position:absolute; width:26px; height:26px; border: 2px solid var(--amber); }
+  .frame span:nth-child(1){ top:0; left:0; border-right:none; border-bottom:none; }
+  .frame span:nth-child(2){ top:0; right:0; border-left:none; border-bottom:none; }
+  .frame span:nth-child(3){ bottom:0; left:0; border-right:none; border-top:none; }
+  .frame span:nth-child(4){ bottom:0; right:0; border-left:none; border-top:none; }
+
+  .scanner-idle{ padding: 34px 20px; text-align:center; }
+  .scanner-idle p{ font-size: 13.5px; color: var(--text-dim); margin: 0 0 16px; }
+
+  button{ font-family: inherit; cursor:pointer; border:none; }
+  .btn{
+    padding: 12px 18px; border-radius: 3px; font-size: 14.5px; font-weight:500;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-primary{ background: var(--amber); color: #201404; }
+  .btn-stop{ background: var(--panel-2); color: var(--red); border:1px solid var(--line); width:100%; padding:12px; border-radius:0; }
+  .btn-ghost{ background:transparent; color: var(--text-dim); border:1px solid var(--line); }
+  .btn-ghost:active{ border-color: var(--text-dim); }
+
+  #cam-error{ display:none; padding: 14px; font-size:13px; color: var(--red); background: rgba(192,89,75,0.08); border-top:1px solid var(--line); }
+
+  .manual{ display:flex; gap:8px; }
+  .manual input{
+    flex:1; background: var(--panel); border:1px solid var(--line); color:var(--text);
+    border-radius: 3px; padding: 11px 12px; font-size: 14px; font-family:'IBM Plex Mono', monospace;
+  }
+  .manual input:focus{ outline:none; border-color: var(--amber); }
+
+  .list-head{ display:flex; align-items:baseline; justify-content:space-between; margin-top:4px; }
+  .list-head h2{ font-size:14px; font-weight:600; margin:0; color: var(--text); }
+  .list-head span{ font-size:12.5px; color: var(--text-dim); }
+
+  .empty{ border:1px dashed var(--line); border-radius:4px; padding: 26px 18px; text-align:center; }
+  .empty p{ margin:0; font-size:13.5px; color: var(--text-dim); line-height:1.5; }
+
+  ul#list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px; background:var(--line); border-radius:4px; overflow:hidden; }
+  ul#list li{
+    background: var(--panel); padding: 12px 14px; display:flex; align-items:center; gap:10px;
+  }
+  .li-main{ flex:1; min-width:0; }
+  .li-serial{ font-family:'IBM Plex Mono', monospace; font-size: 14px; word-break: break-all; }
+  .li-time{ font-size: 11.5px; color: var(--text-dim); margin-top:2px; }
+  .li-btn{ background:transparent; color: var(--text-dim); width:30px; height:30px; border-radius:3px; font-size:15px; }
+  .li-btn:active{ background: var(--panel-2); }
+  .li-btn.del{ color: var(--red); }
+
+  .actionbar{
+    position: fixed; left:0; right:0; bottom:0;
+    padding: 12px 20px calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(0deg, var(--bg) 55%, transparent);
+    display:flex; gap:10px;
+  }
+  .actionbar .btn{ flex:1; }
+  .actionbar .btn-primary[disabled], .actionbar .btn-ghost[disabled]{ opacity:0.35; pointer-events:none; }
+
+  .toast{
+    position: fixed; left:50%; bottom: 96px; transform: translateX(-50%) translateY(10px);
+    background: var(--panel-2); border:1px solid var(--line); color: var(--text);
+    padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity:0; transition: all .2s ease; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Lector de células</h1>
+  <p>Escanea el QR de fabricante para leer el número de serie y añádelo a la lista. Comparte cuando termines.</p>
+</header>
+
+<main>
+  <div class="scanner">
+    <div class="scanner-head">
+      <span><span class="dot" id="dot"></span><span id="scanner-status">Cámara apagada</span></span>
+    </div>
+
+    <div id="reader-wrap">
+      <div id="reader"></div>
+      <div class="frame"><span></span><span></span><span></span><span></span></div>
+    </div>
+
+    <div class="scanner-idle" id="scanner-idle">
+      <p>La cámara solo se activa mientras escaneas.</p>
+      <button class="btn btn-primary" id="btn-start">Escanear código QR</button>
+    </div>
+    <button class="btn-stop" id="btn-stop" style="display:none;">Detener escaneo</button>
+    <div id="cam-error"></div>
+  </div>
+
+  <div class="manual">
+    <input type="text" id="manual-input" placeholder="O escribe el número de serie a mano" inputmode="text">
+    <button class="btn btn-ghost" id="btn-manual-add">Añadir</button>
+  </div>
+
+  <div>
+    <div class="list-head">
+      <h2>Células escaneadas</h2>
+      <span id="count">0</span>
+    </div>
+    <div id="empty" class="empty">
+      <p>Aún no hay ninguna célula en la lista.<br>Escanea un QR o añade un número a mano.</p>
+    </div>
+    <ul id="list"></ul>
+  </div>
+</main>
+
+<div class="actionbar">
+  <button class="btn btn-ghost" id="btn-clear" disabled>Vaciar</button>
+  <button class="btn btn-ghost" id="btn-mail" disabled>Correo</button>
+  <button class="btn btn-primary" id="btn-share" disabled>Compartir</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  const STORAGE_KEY = 'lab_lithium_qr_list';
+  let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  let html5QrCode = null;
+  let scanning = false;
+  let lastCode = null;
+  let lastCodeAt = 0;
+
+  const el = (id) => document.getElementById(id);
+  const listEl = el('list');
+  const emptyEl = el('empty');
+  const countEl = el('count');
+  const toastEl = el('toast');
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  function persist(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }
+
+  function render(){
+    countEl.textContent = items.length;
+    const hasItems = items.length > 0;
+    emptyEl.style.display = hasItems ? 'none' : 'block';
+    listEl.style.display = hasItems ? 'flex' : 'none';
+    el('btn-clear').disabled = !hasItems;
+    el('btn-mail').disabled = !hasItems;
+    el('btn-share').disabled = !hasItems;
+
+    listEl.innerHTML = '';
+    items.slice().reverse().forEach((item) => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="li-main">
+          <div class="li-serial">${escapeHtml(item.serial)}</div>
+          <div class="li-time">${item.time}</div>
+        </div>
+        <button class="li-btn share-one" data-id="${item.id}" title="Compartir esta">↗</button>
+        <button class="li-btn del" data-id="${item.id}" title="Eliminar">✕</button>
+      `;
+      listEl.appendChild(li);
+    });
+  }
+
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function addSerial(serial){
+    serial = serial.trim();
+    if(!serial) return;
+    if(items.some(i => i.serial === serial)){
+      showToast('Ya estaba en la lista');
+      return;
+    }
+    const item = {
+      id: Date.now() + '-' + Math.random().toString(36).slice(2,7),
+      serial,
+      time: new Date().toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+    };
+    items.push(item);
+    persist();
+    render();
+    if(navigator.vibrate) navigator.vibrate(60);
+    showToast('Añadida: ' + serial);
+  }
+
+  listEl.addEventListener('click', (e) => {
+    const delBtn = e.target.closest('.del');
+    const shareBtn = e.target.closest('.share-one');
+    if(delBtn){
+      items = items.filter(i => i.id !== delBtn.dataset.id);
+      persist(); render();
+    } else if(shareBtn){
+      const item = items.find(i => i.id === shareBtn.dataset.id);
+      if(item) shareText(item.serial, true);
+    }
+  });
+
+  el('btn-manual-add').addEventListener('click', () => {
+    addSerial(el('manual-input').value);
+    el('manual-input').value = '';
+  });
+  el('manual-input').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ addSerial(el('manual-input').value); el('manual-input').value = ''; }
+  });
+
+  el('btn-clear').addEventListener('click', () => {
+    if(confirm('¿Vaciar toda la lista?')){
+      items = []; persist(); render();
+    }
+  });
+
+  function listAsText(){
+    return items.map(i => i.serial).join('\n');
+  }
+
+  function shareText(text, isSingle){
+    const payload = { title: 'Números de serie · células', text };
+    if(navigator.share){
+      navigator.share(payload).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(isSingle ? 'Copiado al portapapeles' : 'Lista copiada al portapapeles');
+      }).catch(() => {
+        showToast('No se pudo compartir ni copiar');
+      });
+    }
+  }
+
+  el('btn-share').addEventListener('click', () => shareText(listAsText(), false));
+
+  el('btn-mail').addEventListener('click', () => {
+    const body = encodeURIComponent(listAsText());
+    const subject = encodeURIComponent('Números de serie · células (' + items.length + ')');
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  });
+
+  // --- Cámara / escaneo ---
+  function onScanSuccess(decodedText){
+    const now = Date.now();
+    if(decodedText === lastCode && now - lastCodeAt < 2500) return;
+    lastCode = decodedText;
+    lastCodeAt = now;
+    addSerial(decodedText);
+  }
+
+  async function startScan(){
+    el('scanner-idle').style.display = 'none';
+    el('reader-wrap').classList.add('active');
+    el('btn-stop').style.display = 'block';
+    el('scanner-status').textContent = 'Iniciando cámara…';
+    el('cam-error').style.display = 'none';
+
+    html5QrCode = new Html5Qrcode('reader');
+    try{
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 230, height: 230 } },
+        onScanSuccess,
+        () => {}
+      );
+      scanning = true;
+      el('dot').classList.add('live');
+      el('scanner-status').textContent = 'Buscando código QR…';
+    } catch(err){
+      stopScan();
+      el('cam-error').style.display = 'block';
+      el('cam-error').textContent = 'No se pudo acceder a la cámara. Revisa que el navegador tenga permiso de cámara, y que la página se abra por https.';
+    }
+  }
+
+  async function stopScan(){
+    if(html5QrCode && scanning){
+      try{ await html5QrCode.stop(); await html5QrCode.clear(); } catch(e){}
+    }
+    scanning = false;
+    el('dot').classList.remove('live');
+    el('scanner-status').textContent = 'Cámara apagada';
+    el('reader-wrap').classList.remove('active');
+    el('btn-stop').style.display = 'none';
+    el('scanner-idle').style.display = 'block';
+  }
+
+  el('btn-start').addEventListener('click', startScan);
+  el('btn-stop').addEventListener('click', stopScan);
+
+  render();
+</script>
+</body>
+</html>
