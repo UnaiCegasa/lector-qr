@@ -114,6 +114,13 @@
   .li-main{ flex:1; min-width:0; }
   .li-serial{ font-family:'IBM Plex Mono', monospace; font-size: 14px; word-break: break-all; }
   .li-time{ font-size: 11.5px; color: var(--text-dim); margin-top:2px; }
+  .li-note{
+    display:block; width:100%; margin-top:6px; background:transparent; border:none;
+    border-bottom: 1px dashed var(--line); color: var(--text); font-size: 12.5px; font-style:italic;
+    padding: 3px 0; font-family:'IBM Plex Sans', system-ui, sans-serif;
+  }
+  .li-note::placeholder{ color: var(--text-dim); font-style:italic; }
+  .li-note:focus{ outline:none; border-bottom-color: var(--amber); }
   .li-btn{ background:transparent; color: var(--text-dim); width:30px; height:30px; border-radius:3px; font-size:15px; }
   .li-btn:active{ background: var(--panel-2); }
   .li-btn.del{ color: var(--red); }
@@ -244,6 +251,7 @@
         <div class="li-main">
           <div class="li-serial">${escapeHtml(item.serial)}</div>
           <div class="li-time">${item.time}</div>
+          <input class="li-note" data-id="${item.id}" placeholder="Nota (opcional): p. ej. producto A" value="${escapeAttr(item.note || '')}">
         </div>
         <button class="li-btn share-one" data-id="${item.id}" title="Compartir esta">↗</button>
         <button class="li-btn del" data-id="${item.id}" title="Eliminar">✕</button>
@@ -258,6 +266,10 @@
     return d.innerHTML;
   }
 
+  function escapeAttr(s){
+    return escapeHtml(s).replace(/"/g, '&quot;');
+  }
+
   function addSerial(serial){
     serial = serial.trim();
     if(!serial) return;
@@ -268,6 +280,7 @@
     const item = {
       id: Date.now() + '-' + Math.random().toString(36).slice(2,7),
       serial,
+      note: '',
       time: new Date().toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
     };
     items.push(item);
@@ -285,7 +298,15 @@
       persist(); render();
     } else if(shareBtn){
       const item = items.find(i => i.id === shareBtn.dataset.id);
-      if(item) shareText(item.serial, true);
+      if(item) shareText(serialLine(item), true);
+    }
+  });
+
+  listEl.addEventListener('input', (e) => {
+    const noteInput = e.target.closest('.li-note');
+    if(noteInput){
+      const item = items.find(i => i.id === noteInput.dataset.id);
+      if(item){ item.note = noteInput.value; persist(); }
     }
   });
 
@@ -303,8 +324,12 @@
     }
   });
 
+  function serialLine(item){
+    return item.note ? `${item.serial} — ${item.note}` : item.serial;
+  }
+
   function listAsText(){
-    return items.map(i => i.serial).join('\n');
+    return items.map(serialLine).join('\n');
   }
 
   function shareText(text, isSingle){
