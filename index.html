@@ -155,8 +155,13 @@
 
     <div class="scanner-idle" id="scanner-idle">
       <p>La cámara solo se activa mientras escaneas.</p>
-      <button class="btn btn-primary" id="btn-start">Escanear código QR</button>
+      <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-start">Escanear en directo</button>
+        <button class="btn btn-ghost" id="btn-upload">Subir foto(s)</button>
+      </div>
     </div>
+    <input type="file" id="file-input" accept="image/*" multiple style="display:none">
+    <div id="file-reader" style="display:none;"></div>
     <button class="btn-stop" id="btn-stop" style="display:none;">Detener escaneo</button>
 
     <div class="cam-controls" id="cam-controls">
@@ -420,6 +425,36 @@
     el('scanner-idle').style.display = 'block';
     el('cam-controls').classList.remove('show');
   }
+
+  // --- Subir foto(s) ---
+  const fileScanner = new Html5Qrcode('file-reader');
+
+  el('btn-upload').addEventListener('click', () => el('file-input').click());
+
+  el('file-input').addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    el('file-input').value = '';
+    if(!files.length) return;
+
+    let ok = 0, fail = 0;
+    showToast(`Leyendo ${files.length} foto${files.length > 1 ? 's' : ''}…`);
+    for(const file of files){
+      try{
+        const decoded = await fileScanner.scanFile(file, false);
+        addSerial(decoded);
+        ok++;
+      } catch(err){
+        fail++;
+      }
+    }
+    if(fail === 0){
+      showToast(`${ok} código${ok !== 1 ? 's' : ''} leído${ok !== 1 ? 's' : ''} de las fotos`);
+    } else if(ok === 0){
+      showToast('No se detectó ningún QR en esas fotos');
+    } else {
+      showToast(`${ok} leídos, ${fail} sin QR detectado`);
+    }
+  });
 
   el('btn-start').addEventListener('click', startScan);
   el('btn-stop').addEventListener('click', stopScan);
