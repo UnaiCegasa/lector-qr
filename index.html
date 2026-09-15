@@ -75,6 +75,24 @@
 
   #cam-error{ display:none; padding: 14px; font-size:13px; color: var(--red); background: rgba(192,89,75,0.08); border-top:1px solid var(--line); }
 
+  .cam-controls{ display:none; padding: 12px 14px; border-top:1px solid var(--line); }
+  .cam-controls.show{ display:block; }
+  .cam-row{ display:flex; align-items:center; gap:10px; }
+  .cam-row + .cam-row{ margin-top:10px; }
+  .cam-label{ font-size:12.5px; color: var(--text-dim); width:52px; flex-shrink:0; }
+  input[type="range"]{
+    -webkit-appearance:none; flex:1; height:3px; background: var(--line); border-radius:2px; outline:none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background: var(--amber); cursor:pointer;
+  }
+  .torch-btn{
+    background: var(--panel-2); color: var(--text-dim); border:1px solid var(--line);
+    border-radius:3px; padding:7px 12px; font-size:12.5px; display:flex; align-items:center; gap:6px;
+  }
+  .torch-btn.on{ background: var(--amber-dim); color: var(--amber); border-color: var(--amber-dim); }
+  .focus-tip{ font-size:12px; color: var(--text-dim); line-height:1.5; margin:10px 0 0; }
+
   .manual{ display:flex; gap:8px; }
   .manual input{
     flex:1; background: var(--panel); border:1px solid var(--line); color:var(--text);
@@ -140,6 +158,18 @@
       <button class="btn btn-primary" id="btn-start">Escanear código QR</button>
     </div>
     <button class="btn-stop" id="btn-stop" style="display:none;">Detener escaneo</button>
+
+    <div class="cam-controls" id="cam-controls">
+      <div class="cam-row" id="zoom-row" style="display:none;">
+        <span class="cam-label">Zoom</span>
+        <input type="range" id="zoom-range">
+      </div>
+      <div class="cam-row" id="torch-row" style="display:none;">
+        <button class="torch-btn" id="btn-torch">Activar flash</button>
+      </div>
+      <p class="focus-tip">Si sale borroso: aléjate ~15-20 cm del código y usa el zoom para acercarlo. La cámara suele enfocar peor muy de cerca.</p>
+    </div>
+
     <div id="cam-error"></div>
   </div>
 
@@ -312,7 +342,7 @@
     html5QrCode = new Html5Qrcode('reader');
     try{
       await html5QrCode.start(
-        { facingMode: 'environment' },
+        { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1920 } },
         { fps: 10, qrbox: { width: 230, height: 230 } },
         onScanSuccess,
         () => {}
@@ -320,10 +350,60 @@
       scanning = true;
       el('dot').classList.add('live');
       el('scanner-status').textContent = 'Buscando código QR…';
+      setupCameraControls();
     } catch(err){
       stopScan();
       el('cam-error').style.display = 'block';
       el('cam-error').textContent = 'No se pudo acceder a la cámara. Revisa que el navegador tenga permiso de cámara, y que la página se abra por https.';
+    }
+  }
+
+  function setupCameraControls(){
+    let caps = {};
+    try{ caps = html5QrCode.getRunningTrackCapabilities() || {}; } catch(e){}
+
+    let anyControl = false;
+
+    if(caps.zoom && caps.zoom.min !== undefined && caps.zoom.max !== undefined && caps.zoom.max > caps.zoom.min){
+      anyControl = true;
+      const range = el('zoom-range');
+      range.min = caps.zoom.min;
+      range.max = caps.zoom.max;
+      range.step = caps.zoom.step || (caps.zoom.max - caps.zoom.min) / 20;
+      let current = caps.zoom.min;
+      try{
+        const settings = html5QrCode.getRunningTrackSettings();
+        if(settings && settings.zoom) current = settings.zoom;
+      } catch(e){}
+      range.value = current;
+      el('zoom-row').style.display = 'flex';
+      range.oninput = () => {
+        html5QrCode.applyVideoConstraints({ advanced: [{ zoom: Number(range.value) }] }).catch(() => {});
+      };
+    } else {
+      el('zoom-row').style.display = 'none';
+    }
+
+    if(caps.torch){
+      anyControl = true;
+      let torchOn = false;
+      const torchBtn = el('btn-torch');
+      torchBtn.textContent = 'Activar flash';
+      torchBtn.classList.remove('on');
+      el('torch-row').style.display = 'flex';
+      torchBtn.onclick = () => {
+        torchOn = !torchOn;
+        html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchOn }] }).catch(() => {});
+        torchBtn.textContent = torchOn ? 'Apagar flash' : 'Activar flash';
+        torchBtn.classList.toggle('on', torchOn);
+      };
+    } else {
+      el('torch-row').style.display = 'none';
+    }
+
+    el('cam-controls').classList.toggle('show', true);
+    if(!anyControl){
+      // Sin zoom ni flash soportados: se deja solo el consejo de distancia visible.
     }
   }
 
@@ -337,6 +417,7 @@
     el('reader-wrap').classList.remove('active');
     el('btn-stop').style.display = 'none';
     el('scanner-idle').style.display = 'block';
+    el('cam-controls').classList.remove('show');
   }
 
   el('btn-start').addEventListener('click', startScan);
