@@ -342,7 +342,7 @@
     html5QrCode = new Html5Qrcode('reader');
     try{
       await html5QrCode.start(
-        { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1920 } },
+        { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 230, height: 230 } },
         onScanSuccess,
         () => {}
@@ -354,7 +354,8 @@
     } catch(err){
       stopScan();
       el('cam-error').style.display = 'block';
-      el('cam-error').textContent = 'No se pudo acceder a la cámara. Revisa que el navegador tenga permiso de cámara, y que la página se abra por https.';
+      const detail = (err && (err.message || err.name)) ? ' (' + (err.message || err.name) + ')' : '';
+      el('cam-error').textContent = 'No se pudo acceder a la cámara. Revisa que el navegador tenga permiso de cámara, y que la página se abra por https.' + detail;
     }
   }
 
